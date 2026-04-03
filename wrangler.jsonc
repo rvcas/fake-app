@@ -1,7 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "fake-app",
-  "main": "./worker/index.ts",
   "account_id": "864bff2c217f01d65488f7f5d61c5e55",
   "routes": [
     {
@@ -15,19 +14,8 @@
   },
   "assets": {
     "not_found_handling": "single-page-application",
-    "binding": "ASSETS",
   },
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
   "preview_urls": true,
-  "kv_namespaces": [
-    {
-      "binding": "CHALLENGES",
-      "id": "2a9f96d3cdf145ce89f6825665773780",
-    },
-    {
-      "binding": "CREDENTIALS",
-      "id": "e4e1f6d964a74f6db2dee1017310f380",
-    },
-  ],
 }
