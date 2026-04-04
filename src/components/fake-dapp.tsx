@@ -12,11 +12,22 @@ type AuthResult = {
   accessKeyPublicKey: string;
 };
 
+type SignResult = {
+  message: string;
+  signature: string;
+  publicKey: string;
+};
+
 export function FakeDapp() {
-  const [showIframe, setShowIframe] = useState(false);
+  const [iframeMounted, setIframeMounted] = useState(false);
   const [authResult, setAuthResult] = useState<AuthResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [messageToSign, setMessageToSign] = useState("Hello from fake-app!");
+  const [signResult, setSignResult] = useState<SignResult | null>(null);
+  const [signing, setSigning] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const signResolveRef = useRef<((result: SignResult) => void) | null>(null);
+  const signRejectRef = useRef<((error: Error) => void) | null>(null);
 
   useEffect(() => {
     function handleMessage(event: MessageEvent) {
@@ -26,10 +37,17 @@ export function FakeDapp() {
 
       if (data.type === "authenticated") {
         setAuthResult(data.payload);
-        setShowIframe(false);
         setError(null);
       } else if (data.type === "error") {
         setError(data.payload?.message ?? "Authentication failed");
+      } else if (data.type === "signed") {
+        signResolveRef.current?.(data.payload);
+        signResolveRef.current = null;
+        signRejectRef.current = null;
+      } else if (data.type === "sign-error") {
+        signRejectRef.current?.(new Error(data.payload?.message ?? "Signing failed"));
+        signResolveRef.current = null;
+        signRejectRef.current = null;
       }
     }
 
@@ -38,15 +56,56 @@ export function FakeDapp() {
   }, []);
 
   const handleConnect = useCallback(() => {
-    setShowIframe(true);
+    setIframeMounted(true);
     setError(null);
   }, []);
 
   function handleDisconnect() {
     setAuthResult(null);
-    setShowIframe(false);
+    setIframeMounted(false);
+    setSignResult(null);
     setError(null);
   }
+
+  const handleSign = useCallback(async () => {
+    if (!iframeRef.current?.contentWindow) return;
+    setSigning(true);
+    setSignResult(null);
+
+    try {
+      const result = await new Promise<SignResult>((resolve, reject) => {
+        signResolveRef.current = resolve;
+        signRejectRef.current = reject;
+
+        iframeRef.current!.contentWindow!.postMessage(
+          {
+            source: "midnightos-dapp",
+            type: "sign",
+            payload: {
+              message: messageToSign,
+              requestId: crypto.randomUUID(),
+            },
+          },
+          PASSKEYS_ORIGIN,
+        );
+
+        // Timeout after 30 seconds
+        setTimeout(() => {
+          if (signResolveRef.current) {
+            reject(new Error("Sign request timed out"));
+            signResolveRef.current = null;
+            signRejectRef.current = null;
+          }
+        }, 30_000);
+      });
+
+      setSignResult(result);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Signing failed");
+    } finally {
+      setSigning(false);
+    }
+  }, [messageToSign]);
 
   // Connected — show the dApp content
   if (authResult) {
@@ -78,34 +137,61 @@ export function FakeDapp() {
               </span>
               <p className="font-mono text-xs break-all">{authResult.accessKeyPublicKey}</p>
             </div>
-            <div>
-              <span className="text-muted-foreground text-xs">DID Document</span>
-              <pre className="mt-1 max-h-80 overflow-auto rounded-md bg-muted p-3 text-xs">
-                {JSON.stringify(authResult.didDocument, null, 2)}
-              </pre>
-            </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>dApp Actions</CardTitle>
+            <CardTitle>Sign Message</CardTitle>
             <CardDescription>
-              Pretend blockchain operations using your DID credential
+              Sign a message with your access key via the embedded iframe
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex gap-2">
-            <Button variant="outline" disabled>
-              Send Transaction
+          <CardContent className="space-y-3">
+            <div className="space-y-1">
+              <label htmlFor="message" className="text-xs text-muted-foreground">
+                Message
+              </label>
+              <input
+                id="message"
+                type="text"
+                value={messageToSign}
+                onChange={(e) => setMessageToSign(e.target.value)}
+                className="flex h-8 w-full rounded-md border border-border bg-background px-3 py-1 text-sm"
+              />
+            </div>
+            {error && <p className="text-xs text-destructive">{error}</p>}
+            <Button onClick={handleSign} disabled={signing || !messageToSign}>
+              {signing ? "Signing..." : "Sign Message"}
             </Button>
-            <Button variant="outline" disabled>
-              Sign Message
-            </Button>
-            <Button variant="outline" disabled>
-              Deploy Contract
-            </Button>
+
+            {signResult && (
+              <div className="space-y-2 pt-2">
+                <div>
+                  <span className="text-muted-foreground text-xs">Message</span>
+                  <p className="font-mono text-xs break-all">{signResult.message}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground text-xs">Signature (ECDSA P-256)</span>
+                  <p className="font-mono text-xs break-all">{signResult.signature}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground text-xs">Signed by</span>
+                  <p className="font-mono text-xs break-all">{signResult.publicKey}</p>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
+
+        {/* Hidden iframe — keeps access key alive for signing */}
+        <iframe
+          ref={iframeRef}
+          src={EMBED_URL}
+          allow="publickey-credentials-create; publickey-credentials-get"
+          className="hidden"
+          title="midnightOS Passkey Authentication"
+        />
       </div>
     );
   }
@@ -121,7 +207,7 @@ export function FakeDapp() {
         </p>
       </div>
 
-      {!showIframe && (
+      {!iframeMounted && (
         <Card>
           <CardHeader>
             <CardTitle>Connect Wallet</CardTitle>
@@ -136,7 +222,7 @@ export function FakeDapp() {
         </Card>
       )}
 
-      {showIframe && (
+      {iframeMounted && !authResult && (
         <Card>
           <CardHeader>
             <CardTitle>midnightOS Wallet</CardTitle>
@@ -152,7 +238,11 @@ export function FakeDapp() {
               style={{ height: 240 }}
               title="midnightOS Passkey Authentication"
             />
-            <Button variant="outline" className="mt-3" onClick={() => setShowIframe(false)}>
+            <Button
+              variant="outline"
+              className="mt-3"
+              onClick={() => setIframeMounted(false)}
+            >
               Cancel
             </Button>
           </CardContent>
