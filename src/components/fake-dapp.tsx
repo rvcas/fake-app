@@ -45,7 +45,7 @@ export function FakeDapp() {
         signResolveRef.current = null;
         signRejectRef.current = null;
       } else if (data.type === "sign-error") {
-        signRejectRef.current?.(new Error(data.payload?.message ?? "Signing failed"));
+        signRejectRef.current?.(new Error(data.payload?.error ?? "Signing failed"));
         signResolveRef.current = null;
         signRejectRef.current = null;
       }
@@ -188,9 +188,12 @@ export function FakeDapp() {
               </div>
               <div>
                 <span className="text-muted-foreground text-xs">
-                  Access Key (scoped to this dApp)
+                  Access Key Public Key
                 </span>
                 <p className="font-mono text-xs break-all">{authResult.accessKeyPublicKey}</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Private key held by passkeys.rvcas.dev iframe — never exposed to this dApp
+                </p>
               </div>
             </CardContent>
           </Card>
