@@ -15,6 +15,7 @@ type AuthResult = {
 type SignResult = {
   message: string;
   signature: string;
+  signatureDer: string;
   publicKey: string;
 };
 
@@ -230,8 +231,12 @@ export function FakeDapp() {
                     <p className="font-mono text-xs break-all">{signResult.message}</p>
                   </div>
                   <div>
-                    <span className="text-muted-foreground text-xs">Signature (ECDSA P-256)</span>
+                    <span className="text-muted-foreground text-xs">Signature (raw r||s)</span>
                     <p className="font-mono text-xs break-all">{signResult.signature}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground text-xs">Signature (DER)</span>
+                    <p className="font-mono text-xs break-all">{signResult.signatureDer}</p>
                   </div>
                   <div>
                     <span className="text-muted-foreground text-xs">Signed by</span>
