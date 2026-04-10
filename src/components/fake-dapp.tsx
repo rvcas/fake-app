@@ -5,11 +5,19 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 const PASSKEYS_ORIGIN = "https://passkeys.rvcas.dev";
 const EMBED_URL = `${PASSKEYS_ORIGIN}/embed`;
 
+type KeyAuthorization = {
+  rootPublicKey: string;
+  accessKeyPublicKey: string;
+  credentialId: string;
+  authorizedAt: number;
+};
+
 type AuthResult = {
   credential: { credentialId: string; publicKey: string };
   did: string;
   didDocument: Record<string, unknown>;
   accessKeyPublicKey: string;
+  keyAuthorization?: KeyAuthorization;
 };
 
 type SignResult = {
@@ -192,10 +200,15 @@ export function FakeDapp() {
                   Access Key Public Key
                 </span>
                 <p className="font-mono text-xs break-all">{authResult.accessKeyPublicKey}</p>
+              </div>
+              {authResult.keyAuthorization && (
+              <div>
+                <span className="text-muted-foreground text-xs">Key Authorization</span>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Private key held by passkeys.rvcas.dev iframe — never exposed to this dApp
+                  Root key <span className="font-mono">{authResult.keyAuthorization.rootPublicKey.slice(0, 20)}...</span> authorized this access key at {new Date(authResult.keyAuthorization.authorizedAt).toLocaleString()}
                 </p>
               </div>
+              )}
             </CardContent>
           </Card>
 
